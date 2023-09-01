@@ -3,6 +3,7 @@ const userSchema = new mongoose.Schema({
     username: {type: String, unique: true},
     password: String,
     displayname: String,
+    color: String, /* Hex code */
 }, {
     timestamps: true
 });
