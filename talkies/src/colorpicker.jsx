@@ -85,6 +85,7 @@ class SketchExample extends React.Component {
         },
         popover: {
           position: 'absolute',
+          bottom: '70px',
           zIndex: '2',
         },
         cover: {

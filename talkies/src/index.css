@@ -1,3 +1,51 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
+/* width */
+::-webkit-scrollbar {
+    width: 15px;
+  }
+  
+  /* Track */
+  ::-webkit-scrollbar-track {
+    background: #f1f1f100;
+  }
+  
+  /* Handle */
+  ::-webkit-scrollbar-thumb {
+    background: #890620;
+  }
+  
+  /* Handle on hover */
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2c0703;
+  }
+
+  .rainbowText {
+    margin-top: 0px;
+    margin-bottom: 50px;
+    font-family: sans-serif;
+    font-size: 1.25rem;
+    letter-spacing: 0.15rem;
+    text-transform: uppercase;
+    color: #fff;
+    text-shadow: -2px 2px #ef3550,
+                -4px 4px #f48fb1,
+                -6px 6px #7e57c2,
+                -8px 8px #2196f3,
+                -10px 10px #26c6da,
+                -12px 12px #43a047,
+                -14px 14px #eeff41,
+                -16px 16px #f9a825,
+                -18px 18px #ff5722;
+  }
+  .rainbowGradText {
+    margin-top: 0px;
+    margin-bottom: 10px;
+    font-family: sans-serif;
+    background: linear-gradient(90deg, rgba(180,58,64,1) 0%, rgba(170,124,60,1) 7%, rgba(165,164,58,1) 16%, rgba(71,172,61,1) 28%, rgba(29,253,156,1) 38%, rgba(76,147,237,1) 51%, rgba(164,119,196,1) 63%, rgba(190,136,188,1) 74%, rgba(211,147,173,1) 88%, rgba(252,69,69,1) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }

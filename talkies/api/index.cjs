@@ -1,13 +1,16 @@
 const express = require('express');
 const cookieparser = require('cookie-parser');
 const app = express();
-const user = require('./models/user.cjs');
+const User = require('./models/user.cjs');
+const Message = require('./models/message.cjs');
 const jsonwt = require('jsonwebtoken');
 const cors = require('cors');
 const websocket = require('ws')
 const crypt = require('bcryptjs');
 app.use(express.json());
+app.use('/uploads', express.static(__dirname + '/uploads'));
 app.use(cookieparser());
+const fs = require('fs');
 
 const mongoose = require('mongoose');
 
@@ -22,8 +25,43 @@ const bcryptsalt = crypt.genSaltSync(10)
 const mongooseurl = process.env.MONGO_URL;
 mongoose.connect(mongooseurl);
 
+async function getUserDataFromReq(req) {
+    return new Promise((resolve, reject) => {
+        const login_talkie_cookie = req.cookies?.login_talkie_cookie;
+        if (login_talkie_cookie) {
+        jsonwt.verify(login_talkie_cookie, jsonwtkey, {}, (err, userData) => {
+            if (err) throw err;
+            resolve(userData);
+        })
+
+    } else {
+        reject('No user cookie found.');
+    }
+});
+}
+
 app.get ('/test', (req,res) => {
     res.json('test success');
+});
+
+app.get ('/messages/:userId', async (req,res) => {
+    const {userId} = req.params;
+    const userData = await getUserDataFromReq(req);
+    const thisUserId = userData.userId;
+    const messages = await Message.find({
+        sender:{$in:[userId, thisUserId]},
+        recipient:{$in:[userId, thisUserId]},
+    }).sort({createdAt:1});
+    res.json(messages);
+    /* userId: newuser._id, username,displayname, color */
+
+});
+
+app.get ('/users', async (req,res) => {
+    const users = await User.find(
+        {}, {'_id':1, displayname:1, color:1}
+    )
+    res.json(users);
 });
 
 app.get ('/profile', (req, res) => {
@@ -46,7 +84,7 @@ app.post('/register', async (req,res) => {
     const {username, password, displayname, color} = req.body;
     try {
         const hashpass = crypt.hashSync(password, bcryptsalt);
-        const newuser = await user.create({username,password:hashpass, displayname, color});
+        const newuser = await User.create({username,password:hashpass, displayname, color});
         await jsonwt.sign({userId: newuser._id, username,displayname, color}, jsonwtkey, {},
     (err, login_talkie_cookie) => {
         if (err) throw err;
@@ -68,13 +106,10 @@ app.post('/register', async (req,res) => {
 app.post('/updateaccount', async (req,res) => {
     const {username, displayname, color} = req.body;
     console.log(username);
-    const foundUser = await user.findOne({username});
-    console.log("founduser start:");
-    console.log(foundUser);
-    console.log("founduser stop");
+    const foundUser = await User.findOne({username});
     if (foundUser) {
         try {
-        const updated = await user.updateOne(
+        const updated = await User.updateOne(
             {username: String(foundUser.username)},
             { $set: {color:String(color)}},
         );
@@ -97,12 +132,14 @@ catch(err) {
 };
 });
 
+app.post('/logout', async (req,res) => {
+    res.cookie('login_talkie_cookie', '', {maxAge:1, sameSite:'none', secure:true}).status(201).json("ok");
+});
+
 app.post('/login', async (req,res) => {
     const {username, password, displayname, color} = req.body;
     try {
-        const foundUser = await user.findOne({username});
-        console.log("loginUserFound: ");
-        console.log(foundUser);
+        const foundUser = await User.findOne({username});
         if (foundUser) {
             const passOk = crypt.compareSync(password,foundUser.password);
             if (passOk) {
@@ -133,6 +170,32 @@ const server = app.listen(4000);
 /* create websocket server */
 const websocketserver = new websocket.WebSocketServer({server});
 websocketserver.on('connection', (connection, req) => {
+
+    function sendOnlineUserList() {
+        [...websocketserver.clients].forEach(client => {
+            client.send(JSON.stringify({
+                onlineUsers : [...websocketserver.clients].map(c => ({userId: c.userId, displayname: c.displayname, color: c.color})),
+            }));
+        });
+    }
+
+    connection.isAlive = true;
+    connection.timer = setInterval(() => {
+        connection.ping();
+        connection.deathTimer = setTimeout(() => {
+            connection.isAlive = false;
+            connection.terminate();
+            clearTimeout(connection.deathTimer);
+            clearInterval(connection.timer);
+            sendOnlineUserList();
+            console.log('user dropped');
+        }, 1000);
+    }, 10000);
+
+    connection.on('pong', () => {
+        clearTimeout(connection.deathTimer);
+    });
+
     const cookies = req.headers.cookie;
     if (cookies) {
         /* cookies are separated by semicolons */
@@ -144,7 +207,6 @@ websocketserver.on('connection', (connection, req) => {
             jsonwt.verify(cookiedata,jsonwtkey, {},  (err, userData) => {
                 if (err) throw err
                 const {userId, username, displayname, color} = userData;
-                console.log(userData);
                 connection.userId = userId;
                 connection.displayname = displayname;
                 connection.username = username;
@@ -154,9 +216,49 @@ websocketserver.on('connection', (connection, req) => {
         }
 
     }
-    [...websocketserver.clients].forEach(client => {
-        client.send(JSON.stringify({
-            onlineUsers : [...websocketserver.clients].map(c => ({userId: c.userId, displayname: c.displayname, color: c.color})),
-        }));
-    })
+
+    websocketserver.on('close', data => {
+        console.log('disconnect', data)
+    });
+
+    connection.on('message', async (message) => {
+        const msg = JSON.parse(message.toString());
+        const {recipient,content, file, sender, messageSentTime} = msg;
+        let filename;
+        if (file) {
+            const parts = file.name.split('.');
+            const ext = parts[parts.length-1];
+            filename = Date.now() + '.' + ext;
+            const filePath = __dirname + '/uploads/' + filename;
+            const bufferData = new Buffer(file.data.split(',')[1], 'base64');
+            fs.writeFile(filePath, bufferData, () => {
+                console.log('file saved @ ' + filePath);
+            });
+        };
+
+        if (recipient && sender && messageSentTime) {
+        const messageReturn = await Message.create({
+            recipient: recipient,
+            sender:connection.userId,
+            content: content,
+            file: file ? filename : null,
+            messageSentTime: messageSentTime,
+        });
+        console.log(messageReturn);
+        console.log("message returned.");
+
+         [...websocketserver.clients].filter(c => c.userId === recipient)
+         .forEach(c => c.send(JSON.stringify({
+                recipient,
+                content,
+                sender,
+                file: file ? filename : null,
+                _id: messageReturn._id,
+                messageSentTime: messageSentTime,
+            })));   
+        }
+    });
+    
+    sendOnlineUserList();
+
 });

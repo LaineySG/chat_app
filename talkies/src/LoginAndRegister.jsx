@@ -33,10 +33,12 @@ export default function Register() {
     }
 
     async function login(evt) {
+        const color = genColor();
+        setColor(String(color))
         evt.preventDefault();
         const {data} = await axios.post('/login', {username, password, displayname, color});
-        SetLoggedInDisplayname(displayname);
-        setLoggedInColor(color);
+        SetLoggedInDisplayname(data.displayname);
+        setLoggedInColor(data.color);
         SetLoggedInUsername(username);
         setId(data.id);
         
@@ -60,12 +62,13 @@ async function formSubmitted(evt) {
                 onChange={ev => setPassword(ev.target.value)} 
                 placeholder="password" 
                 className="block w-full rounded-md p-2 mb-5 border-2 border-raspberry"/>
+            <button className="bg-raspberry text-white block w-full rounded-md p-2 mb-8 border-2 border-burgundy" onClick = {() => setLoginOrRegister('login')}>Log In</button>
+            
             <input type="text" value={displayname} 
                 onChange={ev => setDisplayName(ev.target.value)} 
-                placeholder="display name" 
+                placeholder="If registering, enter a display name" 
                 className="block w-full rounded-md p-2 mb-5 border-2 border-raspberry"/>
-            <button className="bg-raspberry text-white block w-full rounded-md p-2 border-2 border-burgundy" onClick = {() => setLoginOrRegister('login')}>Log In</button>
-            <button className="bg-raspberry text-white block w-full rounded-md p-2 mt-5 border-2 border-burgundy" onClick = {() => setLoginOrRegister('register')}>Register</button>
+            <button className="bg-raspberry text-white block w-full rounded-md p-2 mt-3 border-2 border-burgundy" onClick = {() => setLoginOrRegister('register')}>Register</button>
         </form>
 
         </div>
